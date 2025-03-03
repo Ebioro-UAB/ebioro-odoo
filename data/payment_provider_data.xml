@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="payment_provider_ebioro" model="payment.provider">
+        <field name="name">Ebioro</field>
+        <field name="code">ebioro</field>
+        <field name="state">enabled</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="is_published">True</field>
+        <field name="ebioro_public_key">dummy_public_key</field>
+        <field name="ebioro_secret_key">dummy_secret_key</field>
+        <field name="module_id" ref="base.module_payment_ebioro"/>
+        <field name="payment_method_ids" eval="[Command.set([ref('payment.payment_method_card')])]"/>
+        <field name="redirect_form_view_id" ref="redirect_form"/>
+    </record>
+</odoo>

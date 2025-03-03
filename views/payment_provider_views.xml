@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_payment_provider_form_ebioro" model="ir.ui.view">
+        <field name="name">Ebioro Provider Form</field>
+        <field name="model">payment.provider</field>
+        <field name="inherit_id" ref="payment.payment_provider_form"/>
+        <field name="arch" type="xml">
+            <group name="provider_credentials" position="inside">
+                <group invisible="code != 'ebioro'">
+                    <field name="ebioro_public_key" required="code == 'ebioro' and state != 'disabled'" password="True"/>
+                    <field name="ebioro_secret_key" required="code == 'ebioro' and state != 'disabled'" password="True"/>
+                </group>
+            </group>
+        </field>
+    </record>
+</odoo>

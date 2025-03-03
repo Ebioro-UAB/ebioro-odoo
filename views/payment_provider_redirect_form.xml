@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="redirect_form">
+        <form t-att-action="return_url" method="post">
+            <field name="name">ebioro.redirect.form</field>
+            <field name="model">payment.transaction</field>
+            <input type="hidden" name="ebioro_public_key" t-att-value="ebioro_public_key"/>
+            <input type="hidden" name="ebioro_secret_key" t-att-value="ebioro_secret_key"/>
+            <!-- <field name="arch" type="xml">
+                <sheet>
+                    <group>
+                        <field name="ebioro_public_key"/>
+                        <field name="ebioro_secret_key"/>
+                    </group>
+                </sheet>
+            </field> -->
+        </form>
+    </template>
+    <!-- <input type="hidden" name="Brq_websitekey" t-att-value="Brq_websitekey"/>
+            <input type="hidden" name="Brq_amount" t-att-value="Brq_amount"/>
+            <input type="hidden" name="Brq_currency" t-att-value="Brq_currency"/>
+            <input type="hidden" name="Brq_invoicenumber" t-att-value="Brq_invoicenumber"/>
+            <input type="hidden" name="Brq_signature" t-att-value="Brq_signature"/>
+            <input t-if="Brq_culture" type="hidden" name="Brq_culture" t-att-value="Brq_culture"/>
+            
+            <input type="hidden" name="Brq_return" t-att-value="Brq_return"/>
+            <input type="hidden" name="Brq_returncancel" t-att-value="Brq_returncancel"/>
+            <input type="hidden" name="Brq_returnerror" t-att-value="Brq_returnerror"/>
+            <input type="hidden" name="Brq_returnreject" t-att-value="Brq_returnreject"/> 
+        </form>
+    </template>-->
+    <!--  <record id="redirect_form" model="ir.ui.view">
+        <field name="name">ebioro.redirect.form</field>
+        <field name="model">payment.transaction</field>
+        <field name="arch" type="xml">
+            <form string="Redirect to Ebioro">
+                <sheet>
+                    <group>
+                        <field name="ebioro_public_key"/>
+                        <field name="ebioro_secret_key"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record> -->
+    <!-- <template id="redirect_form_ebioro">
+        <form t-att-action="api_url" method="get">
+            <t t-foreach="url_params" t-as="param">
+                <input type="hidden" t-att-name="param" t-att-value="url_params[param]" />
+            </t>
+        </form>
+    </template> -->
+    <!-- <template id="redirect_form_ebioro" name="Ebioro Payment Form" inherit_id="payment.payment_form"> -->
+    <!-- <template id="redirect_form_ebioro" name="Ebioro Payment Form">
+        <xpath expr="//div[@id='payment_method']" position="replace">
+            <div id="payment_method" t-if="provider_code == 'ebioro'">
+                <div class="alert alert-info" role="alert">
+                    You will be redirected to Ebioro to complete your payment.
+                </div>
+
+                <form t-attf-action="{{ tx_values['return_url'] }}" method="post" id="ebioro_payment_form">
+                    <input type="hidden" name="public_key" t-att-value="tx_values['public_key']"/>
+                    <input type="hidden" name="amount" t-att-value="tx_values['amount']"/>
+                    <input type="hidden" name="currency" t-att-value="tx_values['currency']"/>
+                    <input type="hidden" name="reference" t-att-value="tx_values['reference']"/>
+                    <input type="hidden" name="partner_name" t-att-value="tx_values['partner_name']"/>
+                    <input type="hidden" name="partner_email" t-att-value="tx_values['partner_email']"/>
+                    <input type="hidden" name="webhook_url" t-att-value="tx_values['webhook_url']"/>
+                    <input type="hidden" name="provider_id" t-att-value="tx_values['provider_id']"/>
+
+                    <div class="text-center mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            Pay with Ebioro
+                        </button>
+                    </div>
+                </form>
+
+                <script>
+                    console.log('Ebioro payment form initialized');
+                    try {
+                        const form = document.getElementById('ebioro_payment_form');
+                        if (form) {
+                            console.log('Form found, submitting...');
+                            form.submit();
+                        } else {
+                            console.error('Ebioro payment form not found!');
+                        }
+                    } catch (error) {
+                        console.error('Error submitting Ebioro payment form:', error);
+                    }
+                </script>
+            </div>
+        </xpath>
+    </template> -->
+</odoo>
