@@ -7,8 +7,8 @@
         <field name="arch" type="xml">
             <group name="provider_credentials" position="inside">
                 <group invisible="code != 'ebioro'">
-                    <field name="ebioro_public_key" required="code == 'ebioro' and state != 'disabled'" password="True"/>
-                    <field name="ebioro_secret_key" required="code == 'ebioro' and state != 'disabled'" password="True"/>
+                    <field name="ebioro_public_key" required="code == 'ebioro' and state != 'disabled'"/>
+                    <field name="ebioro_secret_key" required="code == 'ebioro' and state != 'disabled'"/>
                 </group>
             </group>
         </field>
