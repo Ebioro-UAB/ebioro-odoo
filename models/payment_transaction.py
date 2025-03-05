@@ -7,6 +7,7 @@ import time
 import hmac
 import hashlib
 from urllib.parse import urlparse, parse_qs
+import math
 
 from werkzeug import urls
 
@@ -34,18 +35,6 @@ class PaymentTransaction(models.Model):
         _logger.debug("Provider code: %s", self.provider_code)
         if self.provider_code != 'ebioro':
             return res
-
-        base_url = "https://test-merchant.ebioro.com"
-
-        # Extract the payment link URL and params and embed them in the redirect form.
-        # parsed_url = urls.url_parse(base_url)
-        # url_params = urls.url_decode(parsed_url.query)
-        # rendering_values = {
-        #     'api_url': base_url,
-        #     'url_params': url_params,  # Encore the params as inputs to preserve them.
-        # }
-
-        # return rendering_values
 
         response = self._send_payment_request()
         if response and 'url' in response:
@@ -115,16 +104,16 @@ class PaymentTransaction(models.Model):
         payload = {
             "amount": {
                 "currency": self.currency_id.name,
-                "value": 1000
+                "value": math.trunc(self.amount * 100)
             },
-            "description": "Payment for order 12345",
+            "description": "Payment for order",
             "redirectUrl": 'http://127.0.0.1:8069/payments/ebioro/return',
             "name": self.partner_name,
             "cancelUrl": 'http://127.0.0.1:8069/payments/ebioro/return',
             "webhookUrl": 'http://127.0.0.1:8069/payments/ebioro/webhook',
             "locale": "en",
             "metadata": {
-                "orderId": 12345 #self.reference
+                "orderId": self.reference
             }
         }
 
@@ -198,8 +187,8 @@ class PaymentTransaction(models.Model):
 
         # Generate HMAC signature
         signature = hmac.new(secret_key.encode('utf-8'), 
-                          payload_string.encode('utf-8'), 
-                          hashlib.sha256).hexdigest()
+                        payload_string.encode('utf-8'), 
+                        hashlib.sha256).hexdigest()
 
         headers = {
             'Content-Type': 'application/json',
