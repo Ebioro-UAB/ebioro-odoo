@@ -117,6 +117,8 @@ class PaymentTransaction(models.Model):
             }
         }
 
+        _logger.info(payload)
+
         status = self.provider_id.state
 
         _logger.info('PROVIDER STATUS')
@@ -128,20 +130,20 @@ class PaymentTransaction(models.Model):
         headers = self._generate_headers(method="POST", path=endpoint, body=payload)
 
         url = f"{base_url}{endpoint}"
-        print("\n=== Request Details ===")
-        print(f"URL: {url}")
-        print("\nHeaders:")
-        print(json.dumps(headers, indent=2))
-        print("\nPayload:")
-        print(json.dumps(payload, indent=2))
+        _logger.info("\n=== Request Details ===")
+        _logger.info(f"URL: {url}")
+        _logger.info("\nHeaders:")
+        _logger.info(json.dumps(headers, indent=2))
+        _logger.info("\nPayload:")
+        _logger.info(json.dumps(payload, indent=2))
 
         try:
             # TODO: Replace with actual Ebioro API endpoint
 
             response = requests.post(url, headers=headers, json=payload)
-            print("\n=== Response Details ===")
-            print(f"Status Code: {response.status_code}")
-            print("\nResponse Body:")
+            _logger.info("\n=== Response Details ===")
+            _logger.info(f"Status Code: {response.status_code}")
+            _logger.info("\nResponse Body:")
 
             try:
                 print(json.dumps(response.json(), indent=2))
