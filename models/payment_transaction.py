@@ -107,10 +107,10 @@ class PaymentTransaction(models.Model):
                 "value": math.trunc(self.amount * 100)
             },
             "description": "Payment for order",
-            "redirectUrl": 'http://127.0.0.1:8069/payments/ebioro/return',
+            "redirectUrl": self._get_return_url(),
             "name": self.partner_name,
-            "cancelUrl": 'http://127.0.0.1:8069/payments/ebioro/return',
-            "webhookUrl": 'http://127.0.0.1:8069/payments/ebioro/webhook',
+            "cancelUrl": self._get_return_url(),
+            "webhookUrl": self._get_webhook_url(),
             "locale": "en",
             "metadata": {
                 "orderId": self.reference
