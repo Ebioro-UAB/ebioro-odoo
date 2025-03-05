@@ -119,8 +119,8 @@ class PaymentTransaction(models.Model):
 
         status = self.provider_id.state
 
-        print('PROVIDER STATUS')
-        print(status)
+        _logger.info('PROVIDER STATUS')
+        _logger.info(status)
 
         base_url = 'https://test-merchant.ebioro.com' if status == 'test' else 'https://test-merchant.ebioro.com'
         endpoint = '/payments'
