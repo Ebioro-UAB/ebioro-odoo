@@ -99,11 +99,13 @@ class PaymentTransaction(models.Model):
         super()._send_payment_request()
         if self.provider_code != 'ebioro':
             return
+        
+        usd_currency = self.env['res.currency'].search([('name', '=', 'USD')], limit=1)
 
         # Make the payment request to Ebioro
         payload = {
             "amount": {
-                "currency": self.currency_id.name,
+                "currency": usd_currency.name,
                 "value": math.trunc(self.amount * 100)
             },
             "description": "Payment for order",
