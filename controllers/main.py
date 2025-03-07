@@ -9,7 +9,7 @@ _logger = logging.getLogger(__name__)
 
 class EbioroController(http.Controller):
     
-    @http.route('/payment/ebioro/webhook', type='json', auth='public', csrf=False)
+    @http.route('/payment/ebioro/webhook', type='http', auth='public', csrf=False)
     def ebioro_webhook(self, **post):
         """ Handle the webhook notifications from Ebioro """
 
