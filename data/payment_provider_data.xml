@@ -2,14 +2,18 @@
 <odoo noupdate="1">
     <record id="payment_provider_ebioro" model="payment.provider">
         <field name="name">Ebioro</field>
+        <!-- <field name="image_1920" type="binary" file="payment_ebioro/static/description/icon.png"/> -->
+        <field name="image_128" type="base64" file="payment_ebioro/static/description/icon.png"/>
+        <field name="redirect_form_view_id" ref="redirect_form"/>
         <field name="code">ebioro</field>
-        <field name="state">enabled</field>
-        <field name="company_id" ref="base.main_company"/>
+        <field name="module_id" ref="base.module_payment_ebioro"/>
+        <!-- Clear the default value before recomputing the pending_msg -->
         <field name="is_published">True</field>
         <field name="ebioro_public_key">pk_testl8bWHgt50Yh7iXX8Tuz2Fqrxdya1PZT+uCzriG7Gc8U=</field>
         <field name="ebioro_secret_key">sk_testGJva9CLhx2RHNz4dUJVnrJkFjmsuHxTWAFtWhzyagGI=</field>
-        <field name="module_id" ref="base.module_payment_ebioro"/>
-        <field name="payment_method_ids" eval="[Command.set([ref('payment.payment_method_card')])]"/>
-        <field name="redirect_form_view_id" ref="redirect_form"/>
+        
+        
+        <field name="payment_method_ids" eval="[Command.set([ref('payment_ebioro.payment_method_ebioro_wallet')])]"/>
+        
     </record>
 </odoo>

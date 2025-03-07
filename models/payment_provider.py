@@ -12,10 +12,10 @@ class PaymentProvider(models.Model):
         selection_add=[('ebioro', "Ebioro")],
         ondelete={'ebioro': 'set default'}
     )
-    supported_methods = fields.Selection([
-        ('card', 'Credit Card'),
-        ('bank', 'Bank Transfer')
-    ], string="Supported Payment Methods", default='card')
+    # supported_methods = fields.Selection([
+    #     ('card', 'Credit Card'),
+    #     ('bank', 'Bank Transfer')
+    # ], string="Supported Payment Methods", default='card')
 
     ebioro_public_key = fields.Char(
         string="Ebioro Public Key",

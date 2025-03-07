@@ -8,6 +8,7 @@
     'depends': ['payment'],
     'data': [
         'views/payment_provider_redirect_form.xml',
+        'data/payment_method_data.xml',
         'data/payment_provider_data.xml',
         'views/payment_provider_views.xml',
     ],

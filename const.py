@@ -22,10 +22,7 @@ CURRENCY_DECIMALS = {
 # The codes of the payment methods to activate when Mercado Pago is activated.
 DEFAULT_PAYMENT_METHOD_CODES = {
     # Primary payment methods.
-    'card',
-    # Brand payment methods.
-    'visa',
-    'mastercard',
+    'ebioro_wallet'
 }
 
 # Mapping of payment method codes to Mercado Pago codes.
