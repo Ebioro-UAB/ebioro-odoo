@@ -10,11 +10,11 @@ _logger = logging.getLogger(__name__)
 
 class EbioroController(http.Controller):
     
-    @http.route('/payment/ebioro/webhook', type='http', auth='public', csrf=False)
+    @http.route('/payments/ebioro/webhook', type='http', auth='public', methods=['POST'], csrf=False)
     def ebioro_webhook(self, **post):
         """ Handle the webhook notifications from Ebioro """
+        _logger.info("Handling Ebioro webhook: %s", post)
         try:
-            _logger.info("Handling Ebioro webhook: %s", post)
             # Check the integrity of the notification.
             tx_sudo = request.env['payment.transaction'].sudo()._get_tx_from_notification_data(
                 'ebioro', post
@@ -64,7 +64,7 @@ class EbioroController(http.Controller):
         request.env['payment.transaction'].sudo()._handle_notification_data('ebioro', post)
         return 'OK'
 
-    @http.route('/payment/ebioro/return', type='http', auth='public', csrf=False)
+    @http.route('/payments/ebioro/return', type='http', auth='public', csrf=False)
     def ebioro_return(self, **data):
         """ Handle the return from Ebioro payment page """
         _logger.info("Handling return from Ebioro payment page: %s", data)
