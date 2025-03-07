@@ -3,6 +3,7 @@ from odoo.http import request
 import hmac
 import hashlib
 import logging
+import json
 
 _logger = logging.getLogger(__name__)
 
@@ -11,6 +12,9 @@ class EbioroController(http.Controller):
     @http.route('/payment/ebioro/webhook', type='json', auth='public', csrf=False)
     def ebioro_webhook(self, **post):
         """ Handle the webhook notifications from Ebioro """
+
+        _logger.info("Ebioro Webhook Headers: %s", dict(request.httprequest.headers))
+        _logger.info("Ebioro Webhook Body: %s", json.dumps(post, indent=4))
         # Verify webhook signature
         signature = request.httprequest.headers.get('X-Ebioro-Signature')
         if not signature:
