@@ -4,6 +4,7 @@ import hmac
 import hashlib
 import logging
 import json
+from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -12,6 +13,20 @@ class EbioroController(http.Controller):
     @http.route('/payment/ebioro/webhook', type='http', auth='public', csrf=False)
     def ebioro_webhook(self, **post):
         """ Handle the webhook notifications from Ebioro """
+        try:
+            _logger.info("Handling Ebioro webhook: %s", post)
+            # Check the integrity of the notification.
+            tx_sudo = request.env['payment.transaction'].sudo()._get_tx_from_notification_data(
+                'ebioro', post
+            )
+            #self._verify_notification_signature(post, tx_sudo)
+
+            # Handle the notification data.
+            # tx_sudo._handle_notification_data('aps', post)
+        except ValidationError:  # Acknowledge the notification to avoid getting spammed.
+            _logger.exception("Unable to handle the notification data; skipping to acknowledge.")
+
+        return ''  # Acknowledge the notification.
 
         _logger.info("Ebioro Webhook Headers: %s", dict(request.httprequest.headers))
         _logger.info("Ebioro Webhook Body: %s", json.dumps(post, indent=4))
