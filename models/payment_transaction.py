@@ -55,10 +55,12 @@ class PaymentTransaction(models.Model):
     def _get_return_url(self):
         """ Helper method to get the return URL """
         return self.get_base_url() + '/payments/ebioro/return'
+        # return 'http://127.0.0.1:8069/payments/ebioro/return'
 
     def _get_webhook_url(self):
         """ Helper method to get the webhook URL """
         return self.get_base_url() + '/payments/ebioro/webhook'
+        # return 'http://127.0.0.1:8069/payments/ebioro/webhook'
 
     def _process_notification_data(self, notification_data):
 
@@ -110,9 +112,9 @@ class PaymentTransaction(models.Model):
                 "currency": usd_currency.name,
                 "value": math.trunc(self.amount * 100)
             },
-            "description": "Payment for order",
+            "description": "Payment for order %s" % self.reference,
             "redirectUrl": self._get_return_url(),
-            "name": self.partner_name,
+            "name": self.env['website'].get_current_website().name,
             "cancelUrl": self._get_return_url(),
             "webhookUrl": self._get_webhook_url(),
             "locale": "en",
