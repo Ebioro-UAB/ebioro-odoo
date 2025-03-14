@@ -201,7 +201,7 @@ class PaymentTransaction(models.Model):
 
         return headers
     
-    def _generate_payload_string(method: str, path: str, body: dict = None):
+    def _generate_payload_string(self, method: str, path: str, body: dict = None):
         data = json.dumps(body, separators=(',', ':')) if body else ""
         timestamp = str(int(time.time()))  # Unix timestamp
         payload_string = path + timestamp + method + data  # Must match backend signing logic
