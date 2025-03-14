@@ -33,8 +33,21 @@ PAYMENT_METHODS_MAPPING = {
 # Mapping of transaction states to Mercado Pago payment statuses.
 # See https://www.mercadopago.com.mx/developers/en/reference/payments/_payments_id/get.
 TRANSACTION_STATUS_MAPPING = {
-    'pending': ('pending', 'in_process', 'in_mediation', 'authorized'),
-    'done': ('approved', 'refunded'),
-    'canceled': ('cancelled', 'null'),
-    'error': ('rejected',),
+    'pending': ('open', 'processing'),
+    'done': ('paid'),
+    'canceled': ('canceled', 'expired', 'refunded'),
+    'error': ('failed',),
 }
+
+EBIORO_TRANSACTION_STATES = [
+    'transaction_created',
+    'transaction_updated',
+    'transaction_failed'
+]
+
+EBIORO_SETTLEMENT_STATES = [
+    'open',
+    'paid',
+    'processing'
+]
+

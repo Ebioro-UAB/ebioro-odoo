@@ -4,6 +4,7 @@ import hmac
 import hashlib
 import logging
 import json
+import pprint
 from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
@@ -13,30 +14,18 @@ class EbioroController(http.Controller):
     @http.route('/payments/ebioro/webhook', type='http', auth='public', methods=['POST'], csrf=False)
     def ebioro_webhook(self, **post):
         """ Handle the webhook notifications from Ebioro """
-        _logger.info("Handling Ebioro webhook: %s", post)
-        try:
-            # Check the integrity of the notification.
-            tx_sudo = request.env['payment.transaction'].sudo()._get_tx_from_notification_data(
-                'ebioro', post
-            )
-            #self._verify_notification_signature(post, tx_sudo)
-
-            # Handle the notification data.
-            # tx_sudo._handle_notification_data('aps', post)
-        except ValidationError:  # Acknowledge the notification to avoid getting spammed.
-            _logger.exception("Unable to handle the notification data; skipping to acknowledge.")
-
-        return ''  # Acknowledge the notification.
 
         _logger.info("Ebioro Webhook Headers: %s", dict(request.httprequest.headers))
         _logger.info("Ebioro Webhook Body: %s", json.dumps(post, indent=4))
         # Verify webhook signature
-        signature = request.httprequest.headers.get('X-Ebioro-Signature')
+        signature = request.httprequest.headers.get('X-Webhook-Auth')
         if not signature:
             _logger.error("No signature found in Ebioro webhook")
             return 'No signature', 400
 
-        tx_reference = post.get('reference')
+        data = request.get_json_data()
+        payload = data.get('data', {})
+        tx_reference = payload.get('metadata', {}).get('orderId')
         if not tx_reference:
             _logger.error("No transaction reference found in Ebioro webhook")
             return 'No transaction reference', 400
@@ -47,21 +36,23 @@ class EbioroController(http.Controller):
             return 'Transaction not found', 404
 
         # Verify webhook signature
-        received_signature = signature.split('=')[-1]
-        payload = request.httprequest.get_data()
+        payloadHttp = request.httprequest.get_data()
+        _logger.info("Payload for transaction %s: %s", tx_reference, payloadHttp)
         expected_signature = hmac.new(
-            # tx.provider_id.ebioro_webhook_key.encode('utf-8'),
-            payload,
+            tx.provider_id.ebioro_secret_key.encode('utf-8'),
+            payloadHttp,
             hashlib.sha256
         ).hexdigest()
 
-        if not hmac.compare_digest(received_signature, expected_signature):
+        _logger.info("Expected signature: %s", expected_signature)
+
+        if not hmac.compare_digest(signature, expected_signature):
             _logger.error("Invalid webhook signature for transaction %s", tx_reference)
             return 'Invalid signature', 400
 
         # Process the webhook data
         _logger.info("Processing Ebioro webhook data for transaction %s", tx_reference)
-        request.env['payment.transaction'].sudo()._handle_notification_data('ebioro', post)
+        request.env['payment.transaction'].sudo()._handle_notification_data('ebioro', payload)
         return 'OK'
 
     @http.route('/payments/ebioro/return', type='http', auth='public', csrf=False)

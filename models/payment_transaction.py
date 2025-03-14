@@ -9,6 +9,7 @@ import hashlib
 from urllib.parse import urlparse, parse_qs
 import math
 
+from odoo.addons.payment_ebioro import const
 from werkzeug import urls
 
 _logger = logging.getLogger(__name__)
@@ -60,29 +61,30 @@ class PaymentTransaction(models.Model):
         return self.get_base_url() + '/payments/ebioro/webhook'
 
     def _process_notification_data(self, notification_data):
+
+        _logger.info("EBIORO WEBHOOK DATA _process_notification_data: %s", notification_data)
+
+
         super()._process_notification_data(notification_data)
         if self.provider_code != 'ebioro':
             return
 
         # Process the notification data from Ebioro
         status = notification_data.get('status')
-        if status == 'completed':
-            self._set_done()
-            _logger.info('Ebioro: Payment successful for transaction %s', self.reference)
-        elif status == 'pending':
+        
+        if status in const.TRANSACTION_STATUS_MAPPING['pending']:
             self._set_pending()
             _logger.info('Ebioro: Payment pending for transaction %s', self.reference)
-        elif status == 'authorized':
-            self._set_authorized()
-            _logger.info('Ebioro: Payment authorized for transaction %s', self.reference)
-        elif status == 'failed':
+        elif status in const.TRANSACTION_STATUS_MAPPING['done']:
+            self._set_done()
+            _logger.info('Ebioro: Payment done for transaction %s', self.reference)
+        elif status in const.TRANSACTION_STATUS_MAPPING['canceled']:
+            self._set_canceled()
+        elif status in const.TRANSACTION_STATUS_MAPPING['error']:
             error_msg = notification_data.get('error', 'Unknown error')
             _logger.error('Ebioro: Payment failed for transaction %s. Error: %s', 
-                         self.reference, error_msg)
+                        self.reference, error_msg)
             self._set_error(f"Payment failed: {error_msg}")
-        elif status == 'cancelled':
-            _logger.info('Ebioro: Payment cancelled for transaction %s', self.reference)
-            self._set_canceled()
         else:
             _logger.error('Ebioro: Received unrecognized payment status: %s', status)
             self._set_error("Received unknown payment status")
@@ -185,14 +187,10 @@ class PaymentTransaction(models.Model):
         public_key = self.provider_id.ebioro_public_key
         secret_key = self.provider_id.ebioro_secret_key
 
-        data = json.dumps(body, separators=(',', ':')) if body else ""
-        timestamp = str(int(time.time()))  # Unix timestamp
-        payload_string = path + timestamp + method + data  # Must match backend signing logic
+        payload_string, timestamp = self._generate_payload_string(method, path, body)
 
         # Generate HMAC signature
-        signature = hmac.new(secret_key.encode('utf-8'), 
-                        payload_string.encode('utf-8'), 
-                        hashlib.sha256).hexdigest()
+        signature = self._generate_signature(payload_string, secret_key)
 
         headers = {
             'Content-Type': 'application/json',
@@ -202,6 +200,18 @@ class PaymentTransaction(models.Model):
         }
 
         return headers
+    
+    def _generate_payload_string(method: str, path: str, body: dict = None):
+        data = json.dumps(body, separators=(',', ':')) if body else ""
+        timestamp = str(int(time.time()))  # Unix timestamp
+        payload_string = path + timestamp + method + data  # Must match backend signing logic
+
+        return payload_string, timestamp
+
+    def _generate_signature(self, data, secret_key):
+        return hmac.new(secret_key.encode('utf-8'), 
+                        data.encode('utf-8'), 
+                        hashlib.sha256).hexdigest()
     
     def _extract_params(self, url):
         parsed_url = urlparse(url)
@@ -223,21 +233,22 @@ class PaymentTransaction(models.Model):
         :raise ValidationError: If inconsistent data are received.
         :raise ValidationError: If the data match no transaction.
         """
-        _logger.info("EBIORO WEBHOOK DATA: %s", notification_data)
+        _logger.info("EBIORO WEBHOOK DATA _get_tx_from_notification_data: %s", notification_data)
         tx = super()._get_tx_from_notification_data(provider_code, notification_data)
         if provider_code != 'ebioro' or len(tx) == 1:
             return tx
 
-        reference = notification_data.get('merchant_reference')
+        reference = notification_data.get('metadata').get('orderId')
         if not reference:
             raise ValidationError(
-                "APS: " + _("Received data with missing reference %(ref)s.", ref=reference)
+                "EBIORO: " + _("Received data with missing reference %(ref)s.", ref=reference)
             )
 
-        tx = self.search([('reference', '=', reference), ('provider_code', '=', 'aps')])
+        tx = self.search([('reference', '=', reference), ('provider_code', '=', 'ebioro')])
         if not tx:
             raise ValidationError(
-                "APS: " + _("No transaction found matching reference %s.", reference)
+                "EBIORO: " + _("No transaction found matching reference %s.", reference)
             )
 
+        _logger.info("EBIORO: Transaction found for reference %s", reference)
         return tx
