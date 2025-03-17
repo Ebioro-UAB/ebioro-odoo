@@ -20,6 +20,7 @@ class PaymentTransaction(models.Model):
 
     ebioro_public_key = fields.Char(related='provider_id.ebioro_public_key', readonly=True)
     ebioro_secret_key = fields.Char(related='provider_id.ebioro_secret_key', readonly=True)
+    ebioro_transaction_id = fields.Char(string="Ebioro Transaction ID", help="Stores the external Ebioro payment transaction ID")
 
     def _get_specific_rendering_values(self, processing_values):
         """ Override of payment to return Ebioro-specific rendering values.

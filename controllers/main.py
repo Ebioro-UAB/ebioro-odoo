@@ -16,7 +16,7 @@ class EbioroController(http.Controller):
         """ Handle the webhook notifications from Ebioro """
 
         _logger.info("Ebioro Webhook Headers: %s", dict(request.httprequest.headers))
-        _logger.info("Ebioro Webhook Body: %s", json.dumps(post, indent=4))
+        
         # Verify webhook signature
         signature = request.httprequest.headers.get('X-Webhook-Auth')
         if not signature:
