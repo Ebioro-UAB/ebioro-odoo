@@ -1,7 +1,11 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
-from odoo.tools import LazyTranslate
-_lt = LazyTranslate(__name__)
+try:
+    from odoo.tools import LazyTranslate
+except ImportError:
+    from odoo.tools.translate import _ as LazyTranslate
+
+_lt = LazyTranslate(__name__) if hasattr(LazyTranslate, '__call__') else LazyTranslate
 
 
 # Currency codes of the currencies supported by Mercado Pago in ISO 4217 format.
@@ -50,4 +54,3 @@ EBIORO_SETTLEMENT_STATES = [
     'paid',
     'processing'
 ]
-
