@@ -7,6 +7,7 @@
     'description': """Ebioro Payment Provider""",
     'depends': ['payment'],
     'data': [
+        'security/ir.model.access.csv',
         'views/payment_provider_redirect_form.xml',
         'data/payment_method_data.xml',
         'data/payment_provider_data.xml',
