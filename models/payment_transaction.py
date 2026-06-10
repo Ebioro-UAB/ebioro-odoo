@@ -7,7 +7,6 @@ import time
 import hmac
 import hashlib
 from urllib.parse import urlparse, parse_qs
-import math
 
 from odoo.addons.payment_ebioro import const
 from werkzeug import urls
@@ -62,6 +61,19 @@ class PaymentTransaction(models.Model):
         """ Helper method to get the webhook URL """
         return self.get_base_url() + '/payments/ebioro/webhook'
 
+    def _ebioro_get_merchant_name(self):
+        """ Name shown on the Ebioro payment page.
+
+        Falls back gracefully when there is no website in context (e.g. a
+        back-office or subscription payment), which `website.get_current_website()`
+        would otherwise crash on.
+        """
+        if 'website' in self.env:
+            website = self.env['website'].get_current_website(fallback=True)
+            if website:
+                return website.name
+        return self.company_id.name or 'Ebioro'
+
     def _process_notification_data(self, notification_data):
 
         _logger.info("EBIORO WEBHOOK DATA _process_notification_data: %s", notification_data)
@@ -104,17 +116,19 @@ class PaymentTransaction(models.Model):
         if self.provider_code != 'ebioro':
             return
         
-        usd_currency = self.env['res.currency'].search([('name', '=', 'USD')], limit=1)
+        # Amount in minor units. Round (don't truncate) to the currency's
+        # precision — math.trunc(19.99 * 100) == 1998, losing a cent.
+        value = int(self.currency_id.round(self.amount) * 100)
 
         # Make the payment request to Ebioro
         payload = {
             "amount": {
-                "currency": usd_currency.name,
-                "value": math.trunc(self.amount * 100)
+                "currency": self.currency_id.name,
+                "value": value
             },
             "description": "Payment for order %s" % self.reference,
             "redirectUrl": self._get_return_url(),
-            "name": self.env['website'].get_current_website().name,
+            "name": self._ebioro_get_merchant_name(),
             "cancelUrl": self._get_return_url(),
             "webhookUrl": self._get_webhook_url(),
             "locale": "en",
@@ -123,15 +137,8 @@ class PaymentTransaction(models.Model):
             }
         }
 
-        _logger.info(payload)
-
-        status = self.provider_id.state
-
-        _logger.info('PROVIDER STATUS')
-        _logger.info(status)
-
-        base_url = 'https://test-merchant.ebioro.com' if status == 'test' else 'https://test-merchant.ebioro.com'
         endpoint = '/payments'
+        base_url = self.provider_id._ebioro_get_api_url()
 
         headers = self._generate_headers(method="POST", path=endpoint, body=payload)
 
@@ -195,15 +202,13 @@ class PaymentTransaction(models.Model):
             return refund_tx
         payment_id = self.ebioro_transaction_id or self.reference
         endpoint = f"/payments/{payment_id}/refunds"
-        base_url = 'https://test-merchant.ebioro.com' if self.provider_id.state == 'test' else 'https://merchant.ebioro.com'
+        base_url = self.provider_id._ebioro_get_api_url()
         url = f"{base_url}{endpoint}"
-        asset_id = self.currency_id.name
-        if hasattr(self.currency_id, 'ebioro_asset_id') and self.currency_id.ebioro_asset_id:
-            asset_id = self.currency_id.ebioro_asset_id
-        value = int(amount_to_refund * 100) if amount_to_refund else int(self.amount * 100)
+        refund_amount = amount_to_refund if amount_to_refund else self.amount
+        value = int(self.currency_id.round(refund_amount) * 100)
         payload = {
             "amount": {
-                "asset_id": asset_id,
+                "asset_id": self.currency_id.name,
                 "value": value
             },
             "description": f"Refund for order {self.reference}",
@@ -283,7 +288,7 @@ class PaymentTransaction(models.Model):
         if provider_code != 'ebioro' or len(tx) == 1:
             return tx
 
-        reference = notification_data.get('metadata').get('orderId')
+        reference = notification_data.get('metadata', {}).get('orderId')
         if not reference:
             raise ValidationError(
                 "EBIORO: " + _("Received data with missing reference %(ref)s.", ref=reference)

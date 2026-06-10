@@ -24,11 +24,14 @@ class PaymentProvider(models.Model):
         required_if_provider='ebioro'
     )
 
-    def _compute_feature_supports(self):
-        super()._compute_feature_supports()
-        for provider in self:
-            if provider.code == 'ebioro':
-                provider.supports_redirect = True
+    def _get_supported_currencies(self):
+        """ Override of `payment` to limit Ebioro to the currencies it settles in. """
+        supported_currencies = super()._get_supported_currencies()
+        if self.code == 'ebioro':
+            supported_currencies = supported_currencies.filtered(
+                lambda c: c.name in const.SUPPORTED_CURRENCIES
+            )
+        return supported_currencies
 
     def _get_default_payment_method_codes(self):
         """ Override of `payment` to return the default payment method codes. """
@@ -36,3 +39,8 @@ class PaymentProvider(models.Model):
         if self.code != 'ebioro':
             return default_codes
         return const.DEFAULT_PAYMENT_METHOD_CODES
+
+    def _ebioro_get_api_url(self):
+        """ Return the Ebioro API base URL for this provider's state. """
+        self.ensure_one()
+        return const.API_URLS.get(self.state, const.API_URLS['test'])
