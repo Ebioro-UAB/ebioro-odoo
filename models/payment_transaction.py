@@ -39,29 +39,28 @@ class PaymentTransaction(models.Model):
             return res
 
         response = self._send_payment_request()
-        if response and 'url' in response:
+        if response and 'return_url' in response:
 
             rendering_values = {
-                'return_url': response['url'],
+                'return_url': response['return_url'],
                 'lang': response['lang'][0],
                 'paymentId': response['paymentId'][0],
                 'auth_token': response['auth_token'][0],
             }
-        
+
             _logger.info('Ebioro: Payment request successful for transaction %s', rendering_values)
             return rendering_values
         else:
+            _logger.error('Ebioro: No redirect URL received in _get_specific_rendering_values')
             raise ValidationError(_("No redirect URL received from Ebioro"))
 
     def _get_return_url(self):
         """ Helper method to get the return URL """
         return self.get_base_url() + '/payments/ebioro/return'
-        # return 'http://127.0.0.1:8069/payments/ebioro/return'
 
     def _get_webhook_url(self):
         """ Helper method to get the webhook URL """
         return self.get_base_url() + '/payments/ebioro/webhook'
-        # return 'http://127.0.0.1:8069/payments/ebioro/webhook'
 
     def _process_notification_data(self, notification_data):
 
@@ -145,9 +144,8 @@ class PaymentTransaction(models.Model):
         _logger.info(json.dumps(payload, indent=2))
 
         try:
-            # TODO: Replace with actual Ebioro API endpoint
-
-            response = requests.post(url, headers=headers, json=payload)
+            data = json.dumps(payload, separators=(',', ':'))
+            response = requests.post(url, headers=headers, data=data)
             _logger.info("\n=== Response Details ===")
             _logger.info(f"Status Code: {response.status_code}")
             _logger.info("\nResponse Body:")
@@ -161,19 +159,20 @@ class PaymentTransaction(models.Model):
 
                 redirect_url = response_data.get('hostedUrl')
 
-                extracted_params = self._extract_params(redirect_url)
-                redirect_url = extracted_params['base_url']# + '?' + extracted_params['query_params']
-
                 if redirect_url:
+                    # Keep the full hosted URL (with its query parameters) as the
+                    # redirect target — stripping it to the base URL loses the
+                    # payment context on the hosted page (July 2025 fix, ported
+                    # from the odoo_17 branch).
+                    extracted_params = self._extract_params(redirect_url)
                     return {
-                        'type': 'ir.actions.act_url',
-                        'url': redirect_url,
+                        'return_url': redirect_url,
                         'lang': extracted_params['query_params']['lang'],
                         'paymentId': extracted_params['query_params']['paymentId'],
                         'auth_token': extracted_params['query_params']['auth_token'],
-                        'target': 'self',
                     }
                 else:
+                    _logger.error('Ebioro: No redirect URL received in _send_payment_request')
                     raise ValidationError(_("No redirect URL received from Ebioro"))
             
             except json.JSONDecodeError:
@@ -184,7 +183,50 @@ class PaymentTransaction(models.Model):
             print("\nError:", str(e))
             raise ValidationError(_("Could not connect to Ebioro: %s", str(e)))
 
-    
+    def _send_refund_request(self, amount_to_refund=None, **kwargs):
+        """
+        Override of payment to send a refund request to Ebioro.
+        :param float amount_to_refund: The amount to refund (in Odoo currency units)
+        :return: The refund transaction if any
+        :rtype: recordset of `payment.transaction`
+        """
+        refund_tx = super()._send_refund_request(amount_to_refund=amount_to_refund, **kwargs)
+        if self.provider_code != 'ebioro':
+            return refund_tx
+        payment_id = self.ebioro_transaction_id or self.reference
+        endpoint = f"/payments/{payment_id}/refunds"
+        base_url = 'https://test-merchant.ebioro.com' if self.provider_id.state == 'test' else 'https://merchant.ebioro.com'
+        url = f"{base_url}{endpoint}"
+        asset_id = self.currency_id.name
+        if hasattr(self.currency_id, 'ebioro_asset_id') and self.currency_id.ebioro_asset_id:
+            asset_id = self.currency_id.ebioro_asset_id
+        value = int(amount_to_refund * 100) if amount_to_refund else int(self.amount * 100)
+        payload = {
+            "amount": {
+                "asset_id": asset_id,
+                "value": value
+            },
+            "description": f"Refund for order {self.reference}",
+            "metadata": {
+                "orderId": self.reference
+            }
+        }
+        headers = self._generate_headers(method="POST", path=endpoint, body=payload)
+        data = json.dumps(payload, separators=(',', ':'))
+        _logger.info("Sending Ebioro refund request: %s", url)
+        _logger.info("Payload: %s", data)
+        _logger.info("Headers: %s", headers)
+        try:
+            response = requests.post(url, headers=headers, data=data)
+            response.raise_for_status()
+            response_data = response.json()
+            _logger.info("Ebioro refund response: %s", response_data)
+            refund_tx.ebioro_refund_id = response_data.get('id')
+        except Exception as e:
+            _logger.error("Ebioro refund failed: %s", str(e))
+            raise ValidationError(_("Ebioro refund failed: %s", str(e)))
+        return refund_tx
+
     def _generate_headers(self, method: str, path: str, body: dict = None) -> dict:
 
         public_key = self.provider_id.ebioro_public_key
