@@ -39,18 +39,19 @@ class PaymentTransaction(models.Model):
             return res
 
         response = self._send_payment_request()
-        if response and 'url' in response:
+        if response and 'return_url' in response:
 
             rendering_values = {
-                'return_url': response['url'],
+                'return_url': response['return_url'],
                 'lang': response['lang'][0],
                 'paymentId': response['paymentId'][0],
                 'auth_token': response['auth_token'][0],
             }
-        
+
             _logger.info('Ebioro: Payment request successful for transaction %s', rendering_values)
             return rendering_values
         else:
+            _logger.error('Ebioro: No redirect URL received in _get_specific_rendering_values')
             raise ValidationError(_("No redirect URL received from Ebioro"))
 
     def _get_return_url(self):
@@ -158,19 +159,20 @@ class PaymentTransaction(models.Model):
 
                 redirect_url = response_data.get('hostedUrl')
 
-                extracted_params = self._extract_params(redirect_url)
-                redirect_url = extracted_params['base_url']# + '?' + extracted_params['query_params']
-
                 if redirect_url:
+                    # Keep the full hosted URL (with its query parameters) as the
+                    # redirect target — stripping it to the base URL loses the
+                    # payment context on the hosted page (July 2025 fix, ported
+                    # from the odoo_17 branch).
+                    extracted_params = self._extract_params(redirect_url)
                     return {
-                        'type': 'ir.actions.act_url',
-                        'url': redirect_url,
+                        'return_url': redirect_url,
                         'lang': extracted_params['query_params']['lang'],
                         'paymentId': extracted_params['query_params']['paymentId'],
                         'auth_token': extracted_params['query_params']['auth_token'],
-                        'target': 'self',
                     }
                 else:
+                    _logger.error('Ebioro: No redirect URL received in _send_payment_request')
                     raise ValidationError(_("No redirect URL received from Ebioro"))
             
             except json.JSONDecodeError:

@@ -5,7 +5,7 @@
         <field name="name">Ebioro Wallet</field>
         <field name="code">ebioro_wallet</field>
         <field name="sequence">1000</field>
-        <field name="active">True</field>
+        <field name="active">False</field>
         <field name="image" type="base64" file="payment_ebioro/static/description/icon.png"/>
         <field name="support_tokenization">False</field>
         <field name="support_express_checkout">False</field>
