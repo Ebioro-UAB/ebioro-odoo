@@ -3,7 +3,6 @@ from odoo import api, fields, models
 from odoo.addons.payment_ebioro import const
 
 _logger = logging.getLogger(__name__)
-_logger.info('Payment Provider Ebioro')
 
 class PaymentProvider(models.Model):
     _inherit = 'payment.provider'
