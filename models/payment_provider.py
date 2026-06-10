@@ -23,6 +23,17 @@ class PaymentProvider(models.Model):
         required_if_provider='ebioro'
     )
 
+    def _compute_feature_support_fields(self):
+        """ Override of `payment` to declare Ebioro's supported features.
+
+        Setting support_refund enables the refund button on completed
+        transactions, which routes to PaymentTransaction._send_refund_request.
+        """
+        super()._compute_feature_support_fields()
+        self.filtered(lambda p: p.code == 'ebioro').update({
+            'support_refund': 'full_only',
+        })
+
     def _get_supported_currencies(self):
         """ Override of `payment` to limit Ebioro to the currencies it settles in. """
         supported_currencies = super()._get_supported_currencies()

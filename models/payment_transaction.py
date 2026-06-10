@@ -82,9 +82,16 @@ class PaymentTransaction(models.Model):
         if self.provider_code != 'ebioro':
             return
 
+        # Store the Ebioro payment id (pt_…) so refunds target the right
+        # resource — without it, _send_refund_request falls back to the Odoo
+        # reference and POSTs to the wrong /payments/{id}/refunds.
+        ebioro_payment_id = notification_data.get('id')
+        if ebioro_payment_id and not self.ebioro_transaction_id:
+            self.ebioro_transaction_id = ebioro_payment_id
+
         # Process the notification data from Ebioro
         status = notification_data.get('status')
-        
+
         if status in const.TRANSACTION_STATUS_MAPPING['pending']:
             self._set_pending()
             _logger.info('Ebioro: Payment pending for transaction %s', self.reference)
