@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <!-- Auto-submitted form that redirects the customer to the Ebioro hosted
+         payment page, rendered with the values from _get_specific_rendering_values. -->
     <template id="redirect_form">
         <form t-att-action="return_url" method="get">
-            <field name="name">ebioro.redirect.form</field>
-            <field name="model">payment.transaction</field>
             <input type="hidden" name="paymentId" t-att-value="paymentId"/>
             <input type="hidden" name="auth_token" t-att-value="auth_token"/>
             <input type="hidden" name="lang" t-att-value="lang"/>

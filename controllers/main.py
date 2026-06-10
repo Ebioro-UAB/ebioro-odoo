@@ -3,78 +3,72 @@ from odoo.http import request
 import hmac
 import hashlib
 import logging
-import json
-import pprint
-from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
 
+
 class EbioroController(http.Controller):
-    
+
     @http.route('/payments/ebioro/webhook', type='http', auth='public', methods=['POST'], csrf=False)
     def ebioro_webhook(self, **post):
-        """ Handle the webhook notifications from Ebioro """
+        """ Handle the signed webhook notifications from Ebioro.
 
-        _logger.info("Ebioro Webhook Headers: %s", dict(request.httprequest.headers))
-        
-        # Verify webhook signature
+        The HMAC signature over the raw body is the only thing we trust to
+        change a transaction's state — the customer-facing return route does
+        not (see ``ebioro_return``).
+        """
         signature = request.httprequest.headers.get('X-Webhook-Auth')
         if not signature:
-            _logger.error("No signature found in Ebioro webhook")
-            return http.Response("No signature", status=400)
+            _logger.warning("Ebioro webhook rejected: missing signature")
+            return http.Response("Bad request", status=400)
 
-        data = request.get_json_data()
-        payload = data.get('data', {})
+        raw_body = request.httprequest.get_data()
+        try:
+            payload = request.get_json_data().get('data', {})
+        except Exception:
+            _logger.warning("Ebioro webhook rejected: body is not valid JSON")
+            return http.Response("Bad request", status=400)
+
         tx_reference = payload.get('metadata', {}).get('orderId')
         if not tx_reference:
-            _logger.error("No transaction reference found in Ebioro webhook")
-            return http.Response("No transaction reference", status=400)
+            _logger.warning("Ebioro webhook rejected: no order reference")
+            return http.Response("Bad request", status=400)
 
-        tx = request.env['payment.transaction'].sudo().search([('reference', '=', tx_reference)])
-        if not tx:
-            _logger.error("No transaction found for reference %s", tx_reference)
-            return http.Response("Transaction not found", status=404)
+        tx = request.env['payment.transaction'].sudo().search(
+            [('reference', '=', tx_reference), ('provider_code', '=', 'ebioro')], limit=1
+        )
 
-        # Verify webhook signature
-        payloadHttp = request.httprequest.get_data()
-        _logger.info("Payload for transaction %s: %s", tx_reference, payloadHttp)
+        # Uniform 400 whether the reference is unknown or the signature is wrong,
+        # so the endpoint can't be used to probe which order references exist.
+        if not tx or not tx.provider_id.ebioro_secret_key:
+            _logger.warning("Ebioro webhook rejected for reference %s", tx_reference)
+            return http.Response("Bad request", status=400)
+
         expected_signature = hmac.new(
             tx.provider_id.ebioro_secret_key.encode('utf-8'),
-            payloadHttp,
-            hashlib.sha256
+            raw_body,
+            hashlib.sha256,
         ).hexdigest()
 
-        _logger.info("Expected signature: %s", expected_signature)
-
         if not hmac.compare_digest(signature, expected_signature):
-            _logger.error("Invalid webhook signature for transaction %s", tx_reference)
-            return http.Response("Invalid signature", status=400)
+            _logger.warning("Ebioro webhook rejected: invalid signature for %s", tx_reference)
+            return http.Response("Bad request", status=400)
 
-        # Process the webhook data
-        _logger.info("Processing Ebioro webhook data for transaction %s", tx_reference)
+        _logger.info("Processing verified Ebioro webhook for transaction %s", tx_reference)
         request.env['payment.transaction'].sudo()._handle_notification_data('ebioro', payload)
         return http.Response("OK", status=200)
 
     @http.route('/payments/ebioro/return', type='http', auth='public', csrf=False)
     def ebioro_return(self, **data):
-        """ Handle the return from Ebioro payment page """
-        _logger.info("Handling return from Ebioro payment page: %s", data)
-        
-        # Handle the return data
-        if not data:
-            _logger.error("No data received from Ebioro return")
-            return request.redirect('/payment/status')
+        """ Handle the customer's return from the Ebioro payment page.
 
-        tx_reference = data.get('reference')
-        if not tx_reference:
-            _logger.error("No transaction reference in return data")
-            return request.redirect('/payment/status')
-
-        tx = request.env['payment.transaction'].sudo().search([('reference', '=', tx_reference)])
-        if not tx:
-            _logger.error("No transaction found for reference %s", tx_reference)
-            return request.redirect('/payment/status')
-
-        # Process the return data
-        request.env['payment.transaction'].sudo()._handle_notification_data('ebioro', data)
+        This route is reached by the customer's browser with query parameters
+        that are NOT authenticated, so it must never change a transaction's
+        state — doing so would let anyone mark an order paid by crafting a URL.
+        The real status arrives via the signed webhook. Here we only send the
+        customer to the standard payment status page, which polls the (already
+        webhook-updated) transaction.
+        """
+        # Don't log the full query string at INFO — it carries auth_token / paymentId.
+        _logger.info("Customer returned from Ebioro payment page (payment %s)", data.get('paymentId', 'unknown'))
         return request.redirect('/payment/status')

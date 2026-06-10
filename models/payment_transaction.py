@@ -7,13 +7,11 @@ import time
 import hmac
 import hashlib
 from urllib.parse import urlparse, parse_qs
-import math
 
 from odoo.addons.payment_ebioro import const
 from werkzeug import urls
 
 _logger = logging.getLogger(__name__)
-_logger.info('Payment Transaction Ebioro')
 
 class PaymentTransaction(models.Model):
     _inherit = 'payment.transaction'
@@ -48,7 +46,7 @@ class PaymentTransaction(models.Model):
                 'auth_token': response['auth_token'][0],
             }
 
-            _logger.info('Ebioro: Payment request successful for transaction %s', rendering_values)
+            _logger.debug('Ebioro: rendering values ready for transaction %s', self.reference)
             return rendering_values
         else:
             _logger.error('Ebioro: No redirect URL received in _get_specific_rendering_values')
@@ -62,9 +60,22 @@ class PaymentTransaction(models.Model):
         """ Helper method to get the webhook URL """
         return self.get_base_url() + '/payments/ebioro/webhook'
 
+    def _ebioro_get_merchant_name(self):
+        """ Name shown on the Ebioro payment page.
+
+        Falls back gracefully when there is no website in context (e.g. a
+        back-office or subscription payment), which `website.get_current_website()`
+        would otherwise crash on.
+        """
+        if 'website' in self.env:
+            website = self.env['website'].get_current_website(fallback=True)
+            if website:
+                return website.name
+        return self.company_id.name or 'Ebioro'
+
     def _process_notification_data(self, notification_data):
 
-        _logger.info("EBIORO WEBHOOK DATA _process_notification_data: %s", notification_data)
+        _logger.debug("Ebioro webhook for %s: status=%s", self.reference, notification_data.get('status'))
 
 
         super()._process_notification_data(notification_data)
@@ -92,7 +103,6 @@ class PaymentTransaction(models.Model):
             self._set_error("Received unknown payment status")
 
     def _send_payment_request(self):
-        _logger.info('ENTER SEND PAYMENT REQUEST')
         """ Override of payment to handle the payment request to Ebioro.
 
         Note: self.ensure_one()
@@ -104,17 +114,19 @@ class PaymentTransaction(models.Model):
         if self.provider_code != 'ebioro':
             return
         
-        usd_currency = self.env['res.currency'].search([('name', '=', 'USD')], limit=1)
+        # Amount in minor units. The outer round() is required: 19.99 is
+        # 19.9899999…9 in IEEE-754, so int(19.99 * 100) truncates to 1998.
+        value = int(round(self.currency_id.round(self.amount) * 100))
 
         # Make the payment request to Ebioro
         payload = {
             "amount": {
-                "currency": usd_currency.name,
-                "value": math.trunc(self.amount * 100)
+                "currency": self.currency_id.name,
+                "value": value
             },
             "description": "Payment for order %s" % self.reference,
             "redirectUrl": self._get_return_url(),
-            "name": self.env['website'].get_current_website().name,
+            "name": self._ebioro_get_merchant_name(),
             "cancelUrl": self._get_return_url(),
             "webhookUrl": self._get_webhook_url(),
             "locale": "en",
@@ -123,39 +135,28 @@ class PaymentTransaction(models.Model):
             }
         }
 
-        _logger.info(payload)
-
-        status = self.provider_id.state
-
-        _logger.info('PROVIDER STATUS')
-        _logger.info(status)
-
-        base_url = 'https://test-merchant.ebioro.com' if status == 'test' else 'https://test-merchant.ebioro.com'
         endpoint = '/payments'
+        base_url = self.provider_id._ebioro_get_api_url()
 
         headers = self._generate_headers(method="POST", path=endpoint, body=payload)
 
         url = f"{base_url}{endpoint}"
-        _logger.info("\n=== Request Details ===")
-        _logger.info(f"URL: {url}")
-        _logger.info("\nHeaders:")
-        _logger.info(json.dumps(headers, indent=2))
-        _logger.info("\nPayload:")
-        _logger.info(json.dumps(payload, indent=2))
+        # Debug only — headers carry the API key + HMAC signature, payload carries
+        # order data; keep them out of production (INFO) logs.
+        _logger.debug("Ebioro payment request to %s", url)
+        _logger.debug("Headers: %s", json.dumps(headers))
+        _logger.debug("Payload: %s", json.dumps(payload))
 
         try:
             data = json.dumps(payload, separators=(',', ':'))
             response = requests.post(url, headers=headers, data=data)
-            _logger.info("\n=== Response Details ===")
-            _logger.info(f"Status Code: {response.status_code}")
-            _logger.info("\nResponse Body:")
+            _logger.debug("Ebioro response status %s", response.status_code)
 
             try:
-                print(json.dumps(response.json(), indent=2))
                 response.raise_for_status()
                 response_data = response.json()
 
-                _logger.info('Ebioro: Payment request successful for transaction %s', response_data)
+                _logger.debug('Ebioro: payment request successful for transaction %s', self.reference)
 
                 redirect_url = response_data.get('hostedUrl')
 
@@ -176,56 +177,26 @@ class PaymentTransaction(models.Model):
                     raise ValidationError(_("No redirect URL received from Ebioro"))
             
             except json.JSONDecodeError:
-                print("Non-JSON response:", response.text)
-                
+                _logger.error("Ebioro: non-JSON response for transaction %s", self.reference)
+                raise ValidationError(_("Unexpected response from Ebioro"))
+
         except requests.exceptions.RequestException as e:
             _logger.exception("Could not reach Ebioro")
-            print("\nError:", str(e))
             raise ValidationError(_("Could not connect to Ebioro: %s", str(e)))
 
-    def _send_refund_request(self, amount_to_refund=None, **kwargs):
-        """
-        Override of payment to send a refund request to Ebioro.
-        :param float amount_to_refund: The amount to refund (in Odoo currency units)
-        :return: The refund transaction if any
-        :rtype: recordset of `payment.transaction`
-        """
-        refund_tx = super()._send_refund_request(amount_to_refund=amount_to_refund, **kwargs)
-        if self.provider_code != 'ebioro':
-            return refund_tx
-        payment_id = self.ebioro_transaction_id or self.reference
-        endpoint = f"/payments/{payment_id}/refunds"
-        base_url = 'https://test-merchant.ebioro.com' if self.provider_id.state == 'test' else 'https://merchant.ebioro.com'
-        url = f"{base_url}{endpoint}"
-        asset_id = self.currency_id.name
-        if hasattr(self.currency_id, 'ebioro_asset_id') and self.currency_id.ebioro_asset_id:
-            asset_id = self.currency_id.ebioro_asset_id
-        value = int(amount_to_refund * 100) if amount_to_refund else int(self.amount * 100)
-        payload = {
-            "amount": {
-                "asset_id": asset_id,
-                "value": value
-            },
-            "description": f"Refund for order {self.reference}",
-            "metadata": {
-                "orderId": self.reference
-            }
-        }
-        headers = self._generate_headers(method="POST", path=endpoint, body=payload)
-        data = json.dumps(payload, separators=(',', ':'))
-        _logger.info("Sending Ebioro refund request: %s", url)
-        _logger.info("Payload: %s", data)
-        _logger.info("Headers: %s", headers)
-        try:
-            response = requests.post(url, headers=headers, data=data)
-            response.raise_for_status()
-            response_data = response.json()
-            _logger.info("Ebioro refund response: %s", response_data)
-            refund_tx.ebioro_refund_id = response_data.get('id')
-        except Exception as e:
-            _logger.error("Ebioro refund failed: %s", str(e))
-            raise ValidationError(_("Ebioro refund failed: %s", str(e)))
-        return refund_tx
+    # NOTE: Refunds are intentionally NOT implemented here.
+    #
+    # Ebioro payments are non-custodial: settled funds land directly on the
+    # merchant's own account, not in an Ebioro-controlled wallet. A refund
+    # therefore moves the merchant's own funds and must be signed by the
+    # merchant — the refund API returns an unsigned transaction (XDR) that the
+    # merchant signs with their Ebioro signing session and submits back.
+    #
+    # An API-key integration like this Odoo module has no signing session, so
+    # it cannot complete a refund. Merchants issue refunds from the Ebioro
+    # enterprise portal (Comercio → the payment → Refund), where the signing
+    # session is available. Accordingly the payment method keeps
+    # support_refund = none, so Odoo shows no refund button for Ebioro.
 
     def _generate_headers(self, method: str, path: str, body: dict = None) -> dict:
 
@@ -278,12 +249,12 @@ class PaymentTransaction(models.Model):
         :raise ValidationError: If inconsistent data are received.
         :raise ValidationError: If the data match no transaction.
         """
-        _logger.info("EBIORO WEBHOOK DATA _get_tx_from_notification_data: %s", notification_data)
+        _logger.debug("Ebioro _get_tx_from_notification_data for ref %s", notification_data.get('metadata', {}).get('orderId'))
         tx = super()._get_tx_from_notification_data(provider_code, notification_data)
         if provider_code != 'ebioro' or len(tx) == 1:
             return tx
 
-        reference = notification_data.get('metadata').get('orderId')
+        reference = notification_data.get('metadata', {}).get('orderId')
         if not reference:
             raise ValidationError(
                 "EBIORO: " + _("Received data with missing reference %(ref)s.", ref=reference)
@@ -295,5 +266,5 @@ class PaymentTransaction(models.Model):
                 "EBIORO: " + _("No transaction found matching reference %s.", reference)
             )
 
-        _logger.info("EBIORO: Transaction found for reference %s", reference)
+        _logger.debug("Ebioro: transaction found for reference %s", reference)
         return tx

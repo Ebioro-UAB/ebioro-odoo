@@ -2,7 +2,9 @@
 <odoo noupdate="1">
 
     <record id="payment_method_ebioro_wallet" model="payment.method">
-        <field name="name">Ebioro Wallet</field>
+        <!-- Customer-facing label at checkout. The internal `code` stays
+             ebioro_wallet (referenced in const.DEFAULT_PAYMENT_METHOD_CODES). -->
+        <field name="name">Pay with crypto</field>
         <field name="code">ebioro_wallet</field>
         <field name="sequence">1000</field>
         <field name="active">False</field>
