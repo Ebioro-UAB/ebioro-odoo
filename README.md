@@ -1,52 +1,73 @@
 # Ebioro Payment Provider for Odoo
 
-This module integrates the Ebioro payment provider with Odoo, supporting digital asset payments and refunds.
+Accept stablecoin (USDC) payments in Odoo through the Ebioro payments platform: payment processing, refunds, and signed webhook status updates.
 
-## Features
-- Payment processing via Ebioro API
-- Refunds via Ebioro API
-- HMAC authentication for all API calls
-- Odoo 18 compatible (use this branch)
+## Branches
+
+| Branch | Purpose |
+|---|---|
+| `development` | Active development — **targets Odoo 18** |
+| `main` | Stable releases (Odoo 18) |
+| `odoo_17` | Frozen legacy branch for Odoo 17 installs (no active maintenance) |
 
 ## Installation
 
 ### Prerequisites
-- Odoo 18 installed
-- Python dependencies: requests, hmac, hashlib (requests is not included by default in Odoo, install with `pip install requests` if needed)
+- Odoo 18
+- Python `requests` library (bundled with the official Odoo images; otherwise `pip install requests`)
 
 ### Steps
-1. **Clone the repository** into your Odoo addons directory:
+1. Clone the repository into your Odoo addons directory **as `payment_ebioro`** (the folder name matters — module imports reference it):
    ```sh
-   git clone <your-repo-url> payment_ebioro
+   git clone https://github.com/Ebioro-UAB/ebioro-odoo payment_ebioro
    ```
-2. **Checkout the odoo_18_structure_fix branch**:
-   ```sh
-   git checkout odoo_18_structure_fix
-   ```
-3. **Install Python dependencies** (if not already available):
-   ```sh
-   pip install requests
-   ```
-4. **Update Odoo Apps List**:
-   - Go to Apps in Odoo backend
-   - Click 'Update Apps List'
-5. **Install the Ebioro Payment Provider module** from the Apps menu.
+2. Restart Odoo and update the apps list (*Apps → Update Apps List*).
+3. Install **Ebioro Payment Provider**.
+4. Go to *Settings → Website / Accounting → Payment Providers → Ebioro*:
+   - Set the state (*Test Mode* while integrating).
+   - Enter your **API Key** and **API Secret** from the Ebioro portal (*Comercio → API para desarrolladores*; use the *test* key pair for Test Mode).
+   - Publish the provider.
 
-## Configuration
-1. Go to **Invoicing > Configuration > Payment Providers** in Odoo.
-2. Select or create the Ebioro provider.
-3. Enter your Ebioro API Public Key and Secret Key (test or live as needed).
-4. Set the provider to 'Test' or 'Production' mode as appropriate.
-5. Save the configuration.
+## Testing
 
-## Usage
-- Create a payment using the Ebioro provider.
-- Refunds can be triggered from the payment transaction or related invoice.
-- All API requests and responses are logged for troubleshooting.
+The repo ships a throwaway local environment:
 
-## Notes
-- Make sure your Odoo server can reach the Ebioro API endpoints.
-- Webhooks must be accessible from the internet for live payment notifications.
+```sh
+docker compose up -d        # Odoo 18 + Postgres on http://localhost:8069
+```
+
+1. Open http://localhost:8069, create a database (any name, demo data **on** — it gives you products to buy).
+2. Install the **eCommerce** app, then **Ebioro Payment Provider** (*Apps → Update Apps List* first).
+3. Configure the Ebioro provider as above with your **test** API keys, state = *Test Mode*, published.
+
+### Webhooks need a public URL
+
+Payment status updates arrive as signed webhooks from the Ebioro platform — they cannot reach `localhost`. Open a tunnel:
+
+```sh
+cloudflared tunnel --url http://localhost:8069     # or: ngrok http 8069
+```
+
+Then tell Odoo to use the tunnel URL when it builds redirect/webhook URLs:
+*Settings → Technical → System Parameters* (developer mode):
+- `web.base.url` → your tunnel URL (e.g. `https://random-name.trycloudflare.com`)
+- add `web.base.url.freeze` = `True` (stops Odoo overwriting it on the next admin login)
+
+### End-to-end test
+
+1. Buy any product in the website shop and choose **Ebioro** at checkout.
+2. You are redirected to the hosted payment page (`sandbox-pay.ebioro.com`) — pay with a test wallet.
+3. The webhook flips the Odoo payment transaction (and sales order) state automatically.
+
+**Debugging tip:** the Ebioro portal's *Comercio → Webhooks* tab shows every delivery attempt against your tunnel URL — status, HTTP code, payload, and a *Resend* button. If a webhook shows *Fallido*, the response body recorded there tells you what Odoo answered.
+
+Reset everything with `docker compose down -v`.
 
 ## Support
-For issues or questions, contact the module maintainer or open an issue in the repository.
+
+- Issues: https://github.com/Ebioro-UAB/ebioro-odoo/issues
+- Email: support@ebioro.com
+
+## License
+
+LGPL-3 — see the module manifest.
