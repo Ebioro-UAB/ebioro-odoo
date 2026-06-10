@@ -69,5 +69,6 @@ class EbioroController(http.Controller):
         customer to the standard payment status page, which polls the (already
         webhook-updated) transaction.
         """
-        _logger.info("Customer returned from Ebioro payment page: %s", data)
+        # Don't log the full query string at INFO — it carries auth_token / paymentId.
+        _logger.info("Customer returned from Ebioro payment page (payment %s)", data.get('paymentId', 'unknown'))
         return request.redirect('/payment/status')
