@@ -195,8 +195,8 @@ class PaymentTransaction(models.Model):
     # An API-key integration like this Odoo module has no signing session, so
     # it cannot complete a refund. Merchants issue refunds from the Ebioro
     # enterprise portal (Comercio → the payment → Refund), where the signing
-    # session is available. Accordingly the provider does NOT declare
-    # support_refund, so Odoo shows no refund button for Ebioro.
+    # session is available. Accordingly the payment method keeps
+    # support_refund = none, so Odoo shows no refund button for Ebioro.
 
     def _generate_headers(self, method: str, path: str, body: dict = None) -> dict:
 
