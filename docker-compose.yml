@@ -1,0 +1,35 @@
+# Local test environment for the Ebioro Odoo payment module.
+#
+#   docker compose up -d        → Odoo 18 on http://localhost:8069
+#   docker compose down -v      → throw everything away and start fresh
+#
+# The repository root is mounted as the `payment_ebioro` addon.
+# See README.md → "Testing" for the full walkthrough.
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: odoo
+      POSTGRES_DB: postgres
+    volumes:
+      - odoo-db:/var/lib/postgresql/data
+
+  odoo:
+    image: odoo:18
+    depends_on:
+      - db
+    ports:
+      - "8069:8069"
+    environment:
+      HOST: db
+      USER: odoo
+      PASSWORD: odoo
+    volumes:
+      - ./:/mnt/extra-addons/payment_ebioro
+      - odoo-web:/var/lib/odoo
+    command: odoo --dev=reload
+
+volumes:
+  odoo-db:
+  odoo-web:
