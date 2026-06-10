@@ -184,45 +184,19 @@ class PaymentTransaction(models.Model):
             _logger.exception("Could not reach Ebioro")
             raise ValidationError(_("Could not connect to Ebioro: %s", str(e)))
 
-    def _send_refund_request(self, amount_to_refund=None, **kwargs):
-        """
-        Override of payment to send a refund request to Ebioro.
-        :param float amount_to_refund: The amount to refund (in Odoo currency units)
-        :return: The refund transaction if any
-        :rtype: recordset of `payment.transaction`
-        """
-        refund_tx = super()._send_refund_request(amount_to_refund=amount_to_refund, **kwargs)
-        if self.provider_code != 'ebioro':
-            return refund_tx
-        payment_id = self.ebioro_transaction_id or self.reference
-        endpoint = f"/payments/{payment_id}/refunds"
-        base_url = self.provider_id._ebioro_get_api_url()
-        url = f"{base_url}{endpoint}"
-        refund_amount = amount_to_refund if amount_to_refund else self.amount
-        value = int(round(self.currency_id.round(refund_amount) * 100))
-        payload = {
-            "amount": {
-                "asset_id": self.currency_id.name,
-                "value": value
-            },
-            "description": f"Refund for order {self.reference}",
-            "metadata": {
-                "orderId": self.reference
-            }
-        }
-        headers = self._generate_headers(method="POST", path=endpoint, body=payload)
-        data = json.dumps(payload, separators=(',', ':'))
-        _logger.debug("Ebioro refund request for %s", self.reference)
-        try:
-            response = requests.post(url, headers=headers, data=data)
-            response.raise_for_status()
-            response_data = response.json()
-            _logger.debug("Ebioro refund response for %s", self.reference)
-            refund_tx.ebioro_refund_id = response_data.get('id')
-        except Exception as e:
-            _logger.error("Ebioro refund failed: %s", str(e))
-            raise ValidationError(_("Ebioro refund failed: %s", str(e)))
-        return refund_tx
+    # NOTE: Refunds are intentionally NOT implemented here.
+    #
+    # Ebioro payments are non-custodial: settled funds land directly on the
+    # merchant's own account, not in an Ebioro-controlled wallet. A refund
+    # therefore moves the merchant's own funds and must be signed by the
+    # merchant — the refund API returns an unsigned transaction (XDR) that the
+    # merchant signs with their Ebioro signing session and submits back.
+    #
+    # An API-key integration like this Odoo module has no signing session, so
+    # it cannot complete a refund. Merchants issue refunds from the Ebioro
+    # enterprise portal (Comercio → the payment → Refund), where the signing
+    # session is available. Accordingly the provider does NOT declare
+    # support_refund, so Odoo shows no refund button for Ebioro.
 
     def _generate_headers(self, method: str, path: str, body: dict = None) -> dict:
 
