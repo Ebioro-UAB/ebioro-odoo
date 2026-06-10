@@ -1,6 +1,10 @@
 # Ebioro Payment Provider for Odoo
 
-Accept stablecoin (USDC) payments in Odoo through the Ebioro payments platform: payment processing, refunds, and signed webhook status updates.
+Accept stablecoin (USDC) payments in Odoo through the Ebioro payments platform: payment processing and signed webhook status updates.
+
+## Refunds
+
+Refunds are **not** issued from Odoo. Ebioro is non-custodial — settled funds land on the merchant's own account, so a refund moves the merchant's funds and must be signed by the merchant. Issue refunds from the **Ebioro enterprise portal** (*Comercio → open the payment → Refund*), where the signing session is available.
 
 ## Branches
 
