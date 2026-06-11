@@ -20,7 +20,13 @@ class PaymentProvider(models.Model):
     ebioro_secret_key = fields.Char(
         string="Ebioro Secret Key",
         help="The secret key used to sign API requests.",
-        required_if_provider='ebioro'
+        required_if_provider='ebioro',
+        # Restrict ORM/RPC read to administrators. The widget `password="True"`
+        # only masks the input; without this, any user able to read
+        # payment.provider could read the raw secret over JSON-RPC. The payment
+        # flow reads it via sudo (see payment_transaction._generate_headers and
+        # the webhook controller), so this does not affect checkout.
+        groups="base.group_system",
     )
 
     def _get_supported_currencies(self):
