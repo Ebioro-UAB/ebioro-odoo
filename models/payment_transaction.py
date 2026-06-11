@@ -139,12 +139,20 @@ class PaymentTransaction(models.Model):
         base_url = self.provider_id._ebioro_get_api_url()
 
         headers = self._generate_headers(method="POST", path=endpoint, body=payload)
+        # Scope the payment to this transaction so a retry/double-submit replays
+        # the original instead of creating a duplicate. The header is not part of
+        # the signed payload, so it is added after the auth headers.
+        headers['Idempotency-Key'] = "odoo-%s" % self.reference
 
         url = f"{base_url}{endpoint}"
-        # Debug only — headers carry the API key + HMAC signature, payload carries
-        # order data; keep them out of production (INFO) logs.
+        # Debug only — never log the API key or HMAC signature. Redact the auth
+        # headers so credentials can't leak into a log drain even at DEBUG level.
+        safe_headers = {
+            k: ('***' if k in ('X-Digest-Key', 'X-Digest-Signature') else v)
+            for k, v in headers.items()
+        }
         _logger.debug("Ebioro payment request to %s", url)
-        _logger.debug("Headers: %s", json.dumps(headers))
+        _logger.debug("Headers: %s", json.dumps(safe_headers))
         _logger.debug("Payload: %s", json.dumps(payload))
 
         try:
