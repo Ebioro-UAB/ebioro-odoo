@@ -12,6 +12,9 @@ class PaymentProvider(models.Model):
         ondelete={'ebioro': 'set default'}
     )
 
+    # Intentionally NOT group-restricted: the public key is the publishable
+    # X-Digest-Key identity sent in plaintext on every API request — it is not a
+    # secret. Only the secret key (below) is restricted to admins.
     ebioro_public_key = fields.Char(
         string="Ebioro Public Key",
         help="The API key used to connect with Ebioro payment service.",
