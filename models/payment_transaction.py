@@ -16,8 +16,10 @@ _logger = logging.getLogger(__name__)
 class PaymentTransaction(models.Model):
     _inherit = 'payment.transaction'
 
-    ebioro_public_key = fields.Char(related='provider_id.ebioro_public_key', readonly=True)
-    ebioro_secret_key = fields.Char(related='provider_id.ebioro_secret_key', readonly=True)
+    # Note: the API keys are NOT mirrored onto the transaction. They live only on
+    # payment.provider (secret restricted to admins) and are read via sudo where
+    # the payment flow needs them — a related field here would re-expose the
+    # secret on every transaction record the customer can read.
     ebioro_transaction_id = fields.Char(string="Ebioro Transaction ID", help="Stores the external Ebioro payment transaction ID")
 
     def _get_specific_rendering_values(self, processing_values):
@@ -208,8 +210,11 @@ class PaymentTransaction(models.Model):
 
     def _generate_headers(self, method: str, path: str, body: dict = None) -> dict:
 
-        public_key = self.provider_id.ebioro_public_key
-        secret_key = self.provider_id.ebioro_secret_key
+        # _send_payment_request runs in the customer's context at checkout; the
+        # secret is admin-restricted, so read the credentials via sudo.
+        provider = self.provider_id.sudo()
+        public_key = provider.ebioro_public_key
+        secret_key = provider.ebioro_secret_key
 
         payload_string, timestamp = self._generate_payload_string(method, path, body)
 
