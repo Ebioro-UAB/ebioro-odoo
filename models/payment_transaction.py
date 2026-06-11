@@ -145,10 +145,14 @@ class PaymentTransaction(models.Model):
         headers['Idempotency-Key'] = "odoo-%s" % self.reference
 
         url = f"{base_url}{endpoint}"
-        # Debug only — headers carry the API key + HMAC signature, payload carries
-        # order data; keep them out of production (INFO) logs.
+        # Debug only — never log the API key or HMAC signature. Redact the auth
+        # headers so credentials can't leak into a log drain even at DEBUG level.
+        safe_headers = {
+            k: ('***' if k in ('X-Digest-Key', 'X-Digest-Signature') else v)
+            for k, v in headers.items()
+        }
         _logger.debug("Ebioro payment request to %s", url)
-        _logger.debug("Headers: %s", json.dumps(headers))
+        _logger.debug("Headers: %s", json.dumps(safe_headers))
         _logger.debug("Payload: %s", json.dumps(payload))
 
         try:
