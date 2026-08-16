@@ -9,7 +9,6 @@ import hashlib
 from urllib.parse import urlsplit, parse_qsl
 
 from odoo.addons.payment_ebioro import const
-from werkzeug import urls
 
 _logger = logging.getLogger(__name__)
 
