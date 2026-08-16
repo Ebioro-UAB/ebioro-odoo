@@ -7,6 +7,9 @@
          browser history or referrer. -->
     <template id="redirect_form">
         <form t-att-action="return_url" method="get">
+            <t t-foreach="form_params" t-as="param">
+                <input type="hidden" t-att-name="param[0]" t-att-value="param[1]"/>
+            </t>
         </form>
     </template>
 </odoo>

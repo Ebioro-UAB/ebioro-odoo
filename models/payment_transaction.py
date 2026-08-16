@@ -6,6 +6,7 @@ import json
 import time
 import hmac
 import hashlib
+from urllib.parse import urlsplit, parse_qsl
 
 from odoo.addons.payment_ebioro import const
 from werkzeug import urls
@@ -38,13 +39,23 @@ class PaymentTransaction(models.Model):
             return res
 
         response = self._send_payment_request()
-        if response and response.get('return_url'):
-            _logger.debug('Ebioro: rendering values ready for transaction %s', self.reference)
-            # Only the tokenless short link is handed to the browser.
-            return {'return_url': response['return_url']}
-        else:
+        url = response.get('return_url') if response else None
+        if not url:
             _logger.error('Ebioro: No redirect URL received in _get_specific_rendering_values')
             raise ValidationError(_("No redirect URL received from Ebioro"))
+
+        # A GET form REPLACES the action's query string with its own fields, so we can't
+        # just point the form at a URL that already carries a query string. Split it: the
+        # base becomes the form action, and each query param becomes a hidden input.
+        # The tokenless short link has no query (bare form → navigates to /<slug>); the
+        # hostedUrl fallback keeps its (payer-scoped) params intact.
+        split = urlsplit(url)
+        base = f"{split.scheme}://{split.netloc}{split.path}"
+        _logger.debug('Ebioro: rendering values ready for transaction %s', self.reference)
+        return {
+            'return_url': base,
+            'form_params': parse_qsl(split.query),
+        }
 
     def _get_return_url(self):
         """ Helper method to get the return URL """
