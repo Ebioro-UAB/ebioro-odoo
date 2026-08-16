@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Auto-submitted form that redirects the customer to the Ebioro hosted
-         payment page, rendered with the values from _get_specific_rendering_values. -->
+    <!-- Auto-submitted form that redirects the customer to the Ebioro tokenless short
+         link (return_url is the /<slug> URL from _get_specific_rendering_values). No
+         auth_token / paymentId in the URL — the hosted page resolves the slug via the
+         server-side session exchange, so no bearer credential rides in the customer's
+         browser history or referrer. -->
     <template id="redirect_form">
         <form t-att-action="return_url" method="get">
-            <input type="hidden" name="paymentId" t-att-value="paymentId"/>
-            <input type="hidden" name="auth_token" t-att-value="auth_token"/>
-            <input type="hidden" name="lang" t-att-value="lang"/>
         </form>
     </template>
 </odoo>
