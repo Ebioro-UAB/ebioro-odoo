@@ -6,10 +6,9 @@ import json
 import time
 import hmac
 import hashlib
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlsplit, parse_qsl
 
 from odoo.addons.payment_ebioro import const
-from werkzeug import urls
 
 _logger = logging.getLogger(__name__)
 
@@ -39,20 +38,23 @@ class PaymentTransaction(models.Model):
             return res
 
         response = self._send_payment_request()
-        if response and 'return_url' in response:
-
-            rendering_values = {
-                'return_url': response['return_url'],
-                'lang': response['lang'][0],
-                'paymentId': response['paymentId'][0],
-                'auth_token': response['auth_token'][0],
-            }
-
-            _logger.debug('Ebioro: rendering values ready for transaction %s', self.reference)
-            return rendering_values
-        else:
+        url = response.get('return_url') if response else None
+        if not url:
             _logger.error('Ebioro: No redirect URL received in _get_specific_rendering_values')
             raise ValidationError(_("No redirect URL received from Ebioro"))
+
+        # A GET form REPLACES the action's query string with its own fields, so we can't
+        # just point the form at a URL that already carries a query string. Split it: the
+        # base becomes the form action, and each query param becomes a hidden input.
+        # The tokenless short link has no query (bare form → navigates to /<slug>); the
+        # hostedUrl fallback keeps its (payer-scoped) params intact.
+        split = urlsplit(url)
+        base = f"{split.scheme}://{split.netloc}{split.path}"
+        _logger.debug('Ebioro: rendering values ready for transaction %s', self.reference)
+        return {
+            'return_url': base,
+            'form_params': parse_qsl(split.query),
+        }
 
     def _get_return_url(self):
         """ Helper method to get the return URL """
@@ -82,6 +84,18 @@ class PaymentTransaction(models.Model):
 
         super()._process_notification_data(notification_data)
         if self.provider_code != 'ebioro':
+            return
+
+        # Defence in depth: reject an event for a different Ebioro payment than the one
+        # this transaction was started with (a superseded/retried payment, or a spoofed
+        # id). The per-provider HMAC already blocks cross-merchant forgery; this stops a
+        # stale/mismatched event from driving the wrong transaction.
+        event_pid = notification_data.get('id')
+        if event_pid and self.ebioro_transaction_id and event_pid != self.ebioro_transaction_id:
+            _logger.warning(
+                'Ebioro: webhook payment %s does not match bound %s for tx %s — ignored',
+                event_pid, self.ebioro_transaction_id, self.reference,
+            )
             return
 
         # Process the notification data from Ebioro
@@ -168,20 +182,17 @@ class PaymentTransaction(models.Model):
 
                 _logger.debug('Ebioro: payment request successful for transaction %s', self.reference)
 
-                redirect_url = response_data.get('hostedUrl')
+                # Bind the Ebioro payment id to this transaction so the webhook can reject
+                # an event carrying a different payment id (defence in depth).
+                if response_data.get('id'):
+                    self.ebioro_transaction_id = response_data['id']
+
+                # Prefer the tokenless short link (no auth_token in the URL); fall back to
+                # the hosted URL only if short links are not enabled for the environment.
+                redirect_url = response_data.get('shortUrl') or response_data.get('hostedUrl')
 
                 if redirect_url:
-                    # Keep the full hosted URL (with its query parameters) as the
-                    # redirect target — stripping it to the base URL loses the
-                    # payment context on the hosted page (July 2025 fix, ported
-                    # from the odoo_17 branch).
-                    extracted_params = self._extract_params(redirect_url)
-                    return {
-                        'return_url': redirect_url,
-                        'lang': extracted_params['query_params']['lang'],
-                        'paymentId': extracted_params['query_params']['paymentId'],
-                        'auth_token': extracted_params['query_params']['auth_token'],
-                    }
+                    return {'return_url': redirect_url}
                 else:
                     _logger.error('Ebioro: No redirect URL received in _send_payment_request')
                     raise ValidationError(_("No redirect URL received from Ebioro"))
@@ -238,19 +249,9 @@ class PaymentTransaction(models.Model):
         return payload_string, timestamp
 
     def _generate_signature(self, data, secret_key):
-        return hmac.new(secret_key.encode('utf-8'), 
-                        data.encode('utf-8'), 
+        return hmac.new(secret_key.encode('utf-8'),
+                        data.encode('utf-8'),
                         hashlib.sha256).hexdigest()
-    
-    def _extract_params(self, url):
-        parsed_url = urlparse(url)
-        query_params = parse_qs(parsed_url.query)
-        base_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
-
-        return {
-            'base_url': base_url,
-            'query_params': query_params
-        }
 
     def _get_tx_from_notification_data(self, provider_code, notification_data):
         """ Override of `payment` to find the transaction based on APS data.

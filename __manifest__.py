@@ -1,6 +1,6 @@
 {
     'name': 'Ebioro Payment Provider',
-    'version': '18.0.1.1.1',
+    'version': '18.0.1.1.2',
     'category': 'Accounting/Payment Providers',
     'sequence': 350,
     'summary': 'Payment Provider: Ebioro Implementation',
